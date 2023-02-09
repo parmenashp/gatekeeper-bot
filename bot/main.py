@@ -26,7 +26,6 @@ class MitBot(commands.Bot):
             users=True,
         )
         intents = discord.Intents.default()
-        intents.invites = True
         intents.message_content = True
         intents.members = True
 
