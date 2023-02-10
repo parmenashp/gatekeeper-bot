@@ -61,9 +61,7 @@ class GatekeeperBot(commands.Bot):
             else:
                 return guild
 
-    async def get_or_fetch_member(
-        self, guild: discord.Guild | int, member_id: int
-    ) -> discord.Member | None:
+    async def get_or_fetch_member(self, guild: discord.Guild | int, member_id: int) -> discord.Member | None:
         """Looks up a member in cache or fetches if not found.
         Parameters
         -----------
@@ -123,7 +121,7 @@ async def main():
     setup_logger()  # intercept logging and send to loguru
 
     async with ClientSession() as aio_client:
-        async with MitBot(config, aio_client) as bot:
+        async with GatekeeperBot(config, aio_client) as bot:
             # always load jishaku to have at least basic remote control/debug
             await bot.load_extension("jishaku")
             await bot.start(config.bot.token)
