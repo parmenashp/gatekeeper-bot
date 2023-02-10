@@ -13,10 +13,16 @@ class BotConfig:
 
 
 @dataclass(frozen=True)
+class DbConfig:
+    dsn = os.environ["DATABASE_URL"]
+
+
+@dataclass(frozen=True)
 class Config:
     """Dataclass that holds all the config for the bot."""
 
     bot: BotConfig = BotConfig()
+    db: DbConfig = DbConfig()
 
 
 config = Config()
