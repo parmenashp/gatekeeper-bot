@@ -11,7 +11,7 @@ from loguru import logger
 from core.config import config
 
 
-class MitBot(commands.Bot):
+class GatekeeperBot(commands.Bot):
     def __init__(
         self,
         config: Config,
