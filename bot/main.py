@@ -43,14 +43,12 @@ class GatekeeperBot(commands.Bot):
 
     async def get_or_fetch_guild(self, guild_id: int) -> discord.Guild | None:
         """Looks up a guild in cache or fetches if not found.
-        Parameters
-        -----------
-        guild_id: int
-            The guild ID to search for.
-        Returns
-        ---------
-        Optional[Guild]
-            The guild or None if not found.
+
+        Args:
+            guild_id (int): The guild ID to search for.
+
+        Returns:
+            Optional[Guild]: The guild or None if not found.
         """
         guild = self.get_guild(guild_id)
         if guild is not None:
@@ -66,16 +64,11 @@ class GatekeeperBot(commands.Bot):
 
     async def get_or_fetch_member(self, guild: discord.Guild | int, member_id: int) -> discord.Member | None:
         """Looks up a member in cache or fetches if not found.
-        Parameters
-        -----------
-        guild: Guild
-            The guild to look in.
-        member_id: int
-            The member ID to search for.
-        Returns
-        ---------
-        Optional[Member]
-            The member or None if not found.
+
+        Args:
+            guild (discord.Guild | int): The guild to search for the member in.
+            member_id (int): The member ID to search for.
+
         """
         # Tries to get the guild if only guild id was passed
         if isinstance(guild, int):
