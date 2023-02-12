@@ -5,6 +5,7 @@ import discord
 from aiohttp import ClientSession
 from core.config import Config
 from core.logging import setup_logger
+from core.database import PostgresPool
 from discord.ext import commands
 from helpers.context import GatekeeperContext
 from loguru import logger
@@ -16,9 +17,11 @@ class GatekeeperBot(commands.Bot):
         self,
         config: Config,
         web_client: ClientSession,
+        pool: asyncpg.Pool,
     ):
-        self.web_client = web_client
         self.config = config
+        self.web_client = web_client
+        self.pool = pool
 
         allowed_mentions = discord.AllowedMentions(
             roles=False,
@@ -102,8 +105,10 @@ class GatekeeperBot(commands.Bot):
     async def setup_hook(self):
         initial_extensions = self.config.bot.initial_cogs
         if initial_extensions:
+            logger.info("Loading initial extensions.")
             for extension in initial_extensions:
                 try:
+                    logger.info(f"Loading extension {extension}")
                     await self.load_extension(extension)
                 except Exception:
                     logger.exception(f"Error while loading extension {extension}")
@@ -111,6 +116,7 @@ class GatekeeperBot(commands.Bot):
     async def on_ready(self):
         if not hasattr(self, "uptime"):
             self.uptime = discord.utils.utcnow()
+            logger.info(f"Logged in as {self.user} (ID: {self.user.id})")  # type: ignore
 
     async def on_message(self, message: discord.Message) -> None:
         ctx = await self.get_context(message, cls=GatekeeperContext)
@@ -121,10 +127,11 @@ async def main():
     setup_logger()  # intercept logging and send to loguru
 
     async with ClientSession() as aio_client:
-        async with GatekeeperBot(config, aio_client) as bot:
-            # always load jishaku to have at least basic remote control/debug
-            await bot.load_extension("jishaku")
-            await bot.start(config.bot.token)
+        async with PostgresPool(config.db.dsn) as pool:
+            async with GatekeeperBot(config, aio_client, pool) as bot:
+                # always load jishaku to have at least basic remote control/debug
+                await bot.load_extension("jishaku")
+                await bot.start(config.bot.token)
 
 
 if __name__ == "__main__":
