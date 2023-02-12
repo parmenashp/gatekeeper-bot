@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 
 class Guilds(commands.Cog):
-    def __init__(self, bot: GatekeeperBot):
+    def __init__(self, bot: "GatekeeperBot"):
         self.bot = bot
 
     @commands.Cog.listener()
@@ -27,11 +27,17 @@ class Guilds(commands.Cog):
                         return await entry.user.send(embed=guild_join_message(guild.preferred_locale))  # type: ignore
                     except discord.Forbidden:
                         pass
+
         logger.info(f"Joined guild {guild.name} ({guild.id}) but could not find a user who invited")
 
-        # If the bot doesn't have permission to view audit logs, send a message to the system channel.
-        if guild.system_channel is not None:
+        # If the bot doesn't have permission to view audit logs,
+        # send a message to the public updates channel, if it exists.
+        if guild.public_updates_channel is not None:
             try:
-                return await guild.system_channel.send(embed=guild_join_message(guild.preferred_locale))  # type: ignore
+                return await guild.public_updates_channel.send(embed=guild_join_message(guild.preferred_locale))  # type: ignore
             except discord.Forbidden:
                 pass
+
+
+async def setup(bot: "GatekeeperBot"):
+    await bot.add_cog(Guilds(bot))

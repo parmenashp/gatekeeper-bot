@@ -1,7 +1,9 @@
 import os
 from dataclasses import dataclass, field
 
-_initial_cogs = []
+_initial_cogs = [
+    "cogs.guilds",
+]
 
 
 @dataclass(frozen=True)
