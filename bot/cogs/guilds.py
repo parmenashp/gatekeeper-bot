@@ -20,11 +20,13 @@ class Guilds(commands.Cog):
 
         # Try to send a message to the user who invited the bot by looking at the audit logs.
         if guild.me.guild_permissions.view_audit_log:
-            async for entry in guild.audit_logs(limit=10, action=discord.AuditLogAction.bot_add):
-                if entry.target.id == self.bot.user.id:  # type: ignore
-                    logger.info(f"Joined guild {guild.name} ({guild.id}) invited by {entry.user.name} ({entry.user.id})")  # type: ignore
+            async for entry in guild.audit_logs(limit=10, action=discord.AuditLogAction.bot_add, oldest_first=False):
+                if entry.target.id == self.bot.user.id and entry.user is not None:  # type: ignore
+                    logger.info(
+                        f"Joined guild {guild.name} ({guild.id}) invited by {entry.user.name} ({entry.user.id})"  # type: ignore
+                    )
                     try:
-                        return await entry.user.send(embed=guild_join_message(guild.preferred_locale))  # type: ignore
+                        return await entry.user.send(embed=guild_join_message(guild.preferred_locale))
                     except discord.Forbidden:
                         pass
 
@@ -34,7 +36,7 @@ class Guilds(commands.Cog):
         # send a message to the public updates channel, if it exists.
         if guild.public_updates_channel is not None:
             try:
-                return await guild.public_updates_channel.send(embed=guild_join_message(guild.preferred_locale))  # type: ignore
+                return await guild.public_updates_channel.send(embed=guild_join_message(guild.preferred_locale))
             except discord.Forbidden:
                 pass
 
