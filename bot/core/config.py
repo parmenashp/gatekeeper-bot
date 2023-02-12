@@ -1,5 +1,5 @@
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 _initial_cogs = []
 
@@ -8,13 +8,12 @@ _initial_cogs = []
 class BotConfig:
     token: str = os.environ["DISCORD_TOKEN"]
     prefix: str = os.environ["DISCORD_PREFIX"]
-    owner_id: int = int(os.environ["DISCORD_OWNER_ID"])
-    initial_cogs: list[str] = _initial_cogs
+    initial_cogs: list[str] = field(default_factory=lambda: _initial_cogs)
 
 
 @dataclass(frozen=True)
 class DbConfig:
-    dsn = os.environ["DATABASE_URL"]
+    dsn = os.environ["POSTGRES_DSN"]
 
 
 @dataclass(frozen=True)
