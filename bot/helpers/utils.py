@@ -132,3 +132,17 @@ async def guess_if_user_is_nitro(
             pass
 
     return False
+
+
+def get_bot_from_interaction(interaction: discord.Interaction) -> "GatekeeperBot":
+    """Get the bot (GatekeeperBot) from an interaction.
+    This is a workaround for the fact that interaction.client is typed as Client.
+
+    Args:
+        interaction (discord.Interaction): The interaction to get the bot from.
+
+    Returns:
+        GatekeeperBot: The bot.
+    """
+
+    return interaction.client  # type: ignore
