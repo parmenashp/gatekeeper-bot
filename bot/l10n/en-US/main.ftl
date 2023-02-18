@@ -1,5 +1,3 @@
-
-## Embed sent when someone adds the bot to the server
 thank_you_embed =
     .title = "Thank you for choosing me!"
     .description =
@@ -7,6 +5,12 @@ thank_you_embed =
 
     To start, you need to set up some things before I can start catching those pesky bots.
     Use the /setup command and follow the instructions."
+
+setup_cancel_button = Cancel
+    .pressed = The setup has been stopped.
+
+setup_continue_button = Continue
+setup_retry_button = Retry
 
 setup_intro_embed =
     .title = Welcome to the initial setup!
@@ -37,7 +41,6 @@ setup_permissions_embed =
     .footer_missing_permissions = Click "Retry" to retry.
     .footer_has_permissions = Click "Continue" to continue.
 
-setup_cancel_button_pressed = The setup has been stopped.
 
 permissions = Permissions
     .kick_members = Kick members

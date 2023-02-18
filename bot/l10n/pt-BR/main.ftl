@@ -1,5 +1,3 @@
-
-## Embed sent when someone adds the bot to the server
 thank_you_embed =
     .title = Obrigado por me escolher!
     .description = 
@@ -8,8 +6,15 @@ thank_you_embed =
     Você precisa configurar algumas coisas antes que eu possa começar a pegar esses bots danadinhos.
     Use o comando /setup e siga as instruções.
 
+setup_cancel_button = Cancelar
+    .pressed = A configuração foi cancelada.
+
+setup_continue_button = Continuar
+setup_retry_button = Tentar novamente
+
+
 setup_intro_embed =
-    .title = Bem-vindo as configuração iniciais!
+    .title = Bem-vindo as configuraçãoes iniciais!
     .description =
     Para que o bot possa começar a funcionar no seu servidor, precisamos configurar algumas coisinhas.
 
