@@ -10,6 +10,7 @@ from discord.ext import commands
 from helpers.context import GatekeeperContext
 from loguru import logger
 from core.config import config
+from core.l10n import Localization
 
 
 class GatekeeperBot(commands.Bot):
@@ -18,10 +19,12 @@ class GatekeeperBot(commands.Bot):
         config: Config,
         web_client: ClientSession,
         pool: asyncpg.Pool,
+        l10n: Localization,
     ):
         self.config = config
         self.web_client = web_client
         self.pool = pool
+        self.l10n = l10n
 
         allowed_mentions = discord.AllowedMentions(
             roles=False,
@@ -119,9 +122,14 @@ class GatekeeperBot(commands.Bot):
 async def main():
     setup_logger()  # intercept logging and send to loguru
 
+    l10n = Localization()
+    l10n.load_localization(["en-US"])
+    l10n.load_localization(["pt-BR", "en-US"])
+    l10n.set_default_locale("en-US")
+
     async with ClientSession() as aio_client:
         async with PostgresPool(config.db.dsn) as pool:
-            async with GatekeeperBot(config, aio_client, pool) as bot:
+            async with GatekeeperBot(config, aio_client, pool, l10n) as bot:
                 # always load jishaku to have at least basic remote control/debug
                 await bot.load_extension("jishaku")
                 await bot.start(config.bot.token)
