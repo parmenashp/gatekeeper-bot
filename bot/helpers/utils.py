@@ -89,7 +89,7 @@ async def is_dm_open(user: discord.User | discord.Member) -> bool:
 
 
 async def guess_if_user_is_nitro(
-    bot: GatekeeperBot,
+    bot: "GatekeeperBot",
     user: discord.User | discord.Member,
     fetch: bool = True,
 ) -> bool:
