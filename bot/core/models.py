@@ -63,3 +63,74 @@ class GuildConfig:
             self.entry_log_channel_id,
             self.verification_log_channel_id,
         )
+
+
+@dataclass
+class JoinGuardConfig:
+    guild_id: int
+    is_enabled: bool = False
+    raid_mode: bool = False
+    join_delta: bool = True
+    join_delta_threshold: int = 86400  # 1 day
+    nitro: bool | None = True
+    mobile: bool | None = True
+    dm_locked: bool | None = True
+
+    @classmethod
+    def from_record(cls, record: asyncpg.Record) -> "JoinGuardConfig":
+        return cls(
+            guild_id=record["guild_id"],
+            is_enabled=record["is_enabled"],
+            raid_mode=record["raid_mode"],
+            join_delta=record["join_delta"],
+            join_delta_threshold=record["join_delta_threshold"],
+            nitro=record["nitro"],
+            mobile=record["mobile"],
+            dm_locked=record["dm_locked"],
+        )
+
+    @classmethod
+    async def get(cls, pool: asyncpg.Pool, guild_id: int) -> Optional["JoinGuardConfig"]:
+        """Get a join guard config from the database.
+
+        Args:
+            pool (asyncpg.Pool): The database connection pool.
+            guild_id (int): The guild ID to search for.
+
+        Returns:
+            Optional[JoinGuardConfig]: The join guard config or None if not found.
+        """
+
+        query = """
+            SELECT * FROM join_guard WHERE guild_id = $1
+        """
+        record = await pool.fetchrow(query, guild_id)
+        if record is None:
+            return None
+        return cls.from_record(record)
+
+    async def save(self, pool: asyncpg.Pool) -> None:
+        """Save/update the join guard config to the database.
+        If the join guard config does not exist, it will be created.
+
+        Args:
+            pool (asyncpg.Pool): The database connection pool.
+        """
+
+        query = """
+            INSERT INTO join_guard (guild_id, is_enabled, raid_mode, join_delta, join_delta_threshold, nitro, mobile, dm_locked)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            ON CONFLICT (guild_id) DO UPDATE
+            SET is_enabled = $2, raid_mode = $3, join_delta = $4, join_delta_threshold = $5, nitro = $6, mobile = $7, dm_locked = $8
+        """
+        await pool.execute(
+            query,
+            self.guild_id,
+            self.is_enabled,
+            self.raid_mode,
+            self.join_delta,
+            self.join_delta_threshold,
+            self.nitro,
+            self.mobile,
+            self.dm_locked,
+        )
