@@ -4,7 +4,7 @@ Gatekeeper is a Discord bot designed to prevent spam bots and self-bots from joi
 
 ## Work in Progress
 
-Gatekeeper is currently a work in progress, and we are actively developing all the features and functionality. If you have any suggestions or feedback, we would love to hear from you!
+Gatekeeper is currently a work in progress, and we are actively developing all features and functionalities. If you have any suggestions or feedback, we would love to hear from you!
 
 ## Contributing
 
