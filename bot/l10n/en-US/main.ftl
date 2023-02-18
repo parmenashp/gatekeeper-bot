@@ -30,7 +30,7 @@ setup_permissions_embed =
     { $permissions }
 
     Make sure that the bot has all the permissions listed above and then click in "Retry".
-    .description_has_permissions = The bot has all the necessary permissions.
+    .description_has_permissions = The bot has all the necessary permissions!
 
     { $permissions }
 

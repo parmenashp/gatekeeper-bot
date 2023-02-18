@@ -21,3 +21,30 @@ setup_intro_embed =
     .step_3_name = Passo 3
     .step_3_value = Selecione qual convite será utilizado.
     .footer = Clique em "Continuar" para começar.
+
+setup_permissions_embed =
+    .title = Verificando permissões.
+    .description_missing_permissions =
+    O bot precisa das seguintes permissões para funcionar corretamente no seu servidor, mas parece que ele não possui todas elas.
+
+    { $permissions }
+
+    Certifique-se de que o bot tenha todas as permissões listadas acima e clique em "Tentar novamente".
+    .description_has_permissions = O bot tem todas as permissões necessárias!
+
+    { $permissions }
+
+    .footer_missing_permissions = Clique em "Tentar novamente" para tentar novamente.
+    .footer_has_permissions = Clique em "Continuar" para continuar.
+
+setup_cancel_button_pressed = A configuração foi cancelada.
+
+permissions = Permissões
+    .kick_members = Expulsar membros
+    .create_instant_invite = Criar convite instantâneo
+    .manage_webhooks = Gerenciar webhooks
+    .read_messages = Ver canais
+    .send_messages = Enviar mensagens
+    .send_messages_in_threads = Enviar mensagens em tópicos
+    .use_external_emojis = Usar emojis externos
+    .add_reactions = Adicionar reações
