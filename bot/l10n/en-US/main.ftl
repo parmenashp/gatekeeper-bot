@@ -41,6 +41,24 @@ setup_permissions_embed =
     .footer_missing_permissions = Click "Retry" to retry.
     .footer_has_permissions = Click "Continue" to continue.
 
+setup_log_view =
+    .title = Select a channel for entry and exit logs
+    .description =
+    Setting up a channel for entry and exit logs is optional, but __highly recommended__.
+    Every time a user joins or leaves the guild, a message will be sent to the selected channel.
+    This includes users who are kicked by the JoinGuard verification system, along with useful information about the user.
+
+    We recommend using a dedicated channel for logs, such as #logs, and ensuring that only your staff have access to it.
+
+    If you choose not to set up a log channel, you can click "Skip" to move on to the next step.
+    .description_missing_permissions = 
+    The bot does not have the Manage Webhooks permission, which is required to create the webhook that will be used to send the logs.
+    Please ensure that the bot has the Manage Webhooks permission for the selected channel and then click "Retry" to try again.
+
+    .footer_missing_permissions = Click "Retry" to retry or click "Skip" to skip this step.
+    .footer = Select a channel or click "Skip" to skip this step.
+    .placeholder = Select a channel for the logs.
+    .channel_selected = The channel { $channel } has been selected.
 
 permissions = Permissions
     .kick_members = Kick members

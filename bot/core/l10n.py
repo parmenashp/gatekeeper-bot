@@ -1,4 +1,5 @@
 import discord
+from discord import app_commands
 from pathlib import Path
 from fluent.runtime import FluentLocalization as FluentLocalizationBase
 from fluent.runtime import FluentResourceLoader
@@ -92,3 +93,21 @@ class Localization:
             locale (str): The locale to set as the default.
         """
         self._default_locale = locale
+
+
+class Translator(app_commands.Translator):
+    def __init__(self, localization: Localization) -> None:
+        self.localization = localization
+
+    async def translate(
+        self,
+        string: app_commands.locale_str,
+        locale: discord.Locale,
+        context: app_commands.TranslationContextTypes,
+    ) -> str | None:
+        pass
+
+        if context.location == app_commands.TranslationContextLocation.command_name:
+            pass
+
+            # TODO
