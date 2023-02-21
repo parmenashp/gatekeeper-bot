@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 import discord
 from core import models
 from core.l10n import Localization
-from discord import app_commands
+from discord import Embed, app_commands
 from discord.ext import commands
 from helpers.emojis import Emojis
 from helpers.utils import get_bot_from_interaction
@@ -31,7 +31,7 @@ class SetupBaseView(discord.ui.View):
     Used to display the cancel button in all views.
     """
 
-    def __init__(self, *, timeout=VIEWS_TIMEOUT, last_interaction: discord.Interaction | None = None):
+    def __init__(self, *, last_interaction: discord.Interaction | None = None):
         self.last_interaction = last_interaction
         _ = None
         if last_interaction:
@@ -40,17 +40,22 @@ class SetupBaseView(discord.ui.View):
 
         # This is a workaround to make the cancel button always the last button.
         for index, item in enumerate(self.__view_children_items__):
+            if "style" not in item.__discord_ui_model_kwargs__:
+                continue
             if item.__discord_ui_model_kwargs__["style"] == discord.ButtonStyle.red:
                 self.__view_children_items__.append(self.__view_children_items__.pop(index))
                 break
 
-        super().__init__(timeout=timeout)
+        super().__init__(timeout=VIEWS_TIMEOUT)
 
-        # Translate the labels of the buttons
+        # Translate the labels of the buttons and selects
         for index, item in enumerate(self.children):
+            if _ is None:
+                break
             if isinstance(item, discord.ui.Button):
-                if _:
-                    item.label = _(item.label)  # type: ignore
+                item.label = _(item.label)  # type: ignore
+            if isinstance(item, discord.ui.ChannelSelect):
+                item.placeholder = _(item.placeholder)  # type: ignore
 
     def disable_timeout(self):
         """Disable the timeout of the view."""
@@ -69,6 +74,82 @@ class SetupBaseView(discord.ui.View):
         bot = get_bot_from_interaction(interaction)
         _ = bot.l10n.get_localization(interaction.locale).format
         await interaction.response.edit_message(content=_("setup_cancel_button.pressed"), embed=None, view=None)
+
+
+class SetupLogChannelView(SetupBaseView):
+    def __init__(
+        self,
+        *,
+        is_missing_permissions: bool = False,
+        channel: app_commands.AppCommandChannel | app_commands.AppCommandThread | None = None,
+        last_interaction: discord.Interaction | None = None,
+    ):
+        super().__init__(last_interaction=last_interaction)
+        self.is_missing_permissions = is_missing_permissions
+        self.channel = channel
+
+        if self.is_missing_permissions:
+            self.remove_item(self.log_channel_select)
+        else:
+            self.remove_item(self.retry_button)
+
+    def embed(self, l10n: Localization, locale: discord.Locale):
+        """Create the embed for this view."""
+        _ = l10n.get_localization(locale).format
+        if not self.is_missing_permissions:
+            embed = discord.Embed(title="setup_log_view.title", description="setup_log_view.description")
+            embed.set_footer(text="setup_log_view.footer")
+        else:
+            embed = discord.Embed(
+                title="setup_log_view.title", description="setup_log_view.description_missing_permissions"
+            )
+            embed.set_footer(text="setup_log_view.footer_missing_permissions")
+        return embed
+
+    def _check_permissions(self, guild: discord.Guild, channel_id: int):
+        """Check if the bot has the required permissions in the selected channel."""
+        resolved_channel = guild.get_channel_or_thread(channel_id)
+        if resolved_channel:
+            return resolved_channel.permissions_for(guild.me).manage_webhooks
+        else:
+            # TODO: Send some kind of error
+            return False
+
+    def update_guild_config(self, guild_id: int, channel_id: int):
+        pass
+
+    @discord.ui.select(cls=discord.ui.ChannelSelect, placeholder="setup_log_view.placeholder")
+    async def log_channel_select(self, interaction: discord.Interaction, select: discord.ui.ChannelSelect):
+        """Called when the user selects a channel."""
+        bot = get_bot_from_interaction(interaction)
+        self.channel = select.values[0]
+
+        if not self._check_permissions(interaction.guild, self.channel.id):  # type: ignore
+            view = SetupLogChannelView(is_missing_permissions=True, channel=self.channel, last_interaction=interaction)
+            embed = view.embed(bot.l10n, interaction.locale)
+
+            await interaction.response.edit_message(
+                embed=embed,
+                view=view,
+            )
+
+        await interaction.response.edit_message(
+            content=f"Canal selecionado de primeira: {self.channel.mention}",  # type: ignore
+            embed=None,
+            view=None,
+        )
+
+    @discord.ui.button(label="setup_retry_button", style=discord.ButtonStyle.grey)
+    async def retry_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self._check_permissions(self.channel.guild, self.channel.id):  # type: ignore
+            await interaction.response.edit_message(
+                content=f"Canal seleccionado: {self.channel.mention}",  # type: ignore
+                embed=None,
+                view=None,
+            )
+        else:
+            await interaction.response.defer()
+            # TODO: Maybe alert the user that is sill missing permissions
 
 
 class SetupPermissionsView(SetupBaseView):
@@ -120,7 +201,10 @@ class SetupPermissionsView(SetupBaseView):
 
     @discord.ui.button(label="setup_continue_button", style=discord.ButtonStyle.green)
     async def continue_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.edit_message(content="Button pressed")
+        bot = get_bot_from_interaction(interaction)
+        view = SetupLogChannelView(last_interaction=interaction)
+        embed = view.embed(bot.l10n, interaction.locale)
+        await interaction.response.edit_message(embed=embed, view=view)
 
     @discord.ui.button(label="setup_retry_button", style=discord.ButtonStyle.grey)
     async def retry_button(self, interaction: discord.Interaction, button: discord.ui.Button):
