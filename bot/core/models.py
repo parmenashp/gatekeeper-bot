@@ -7,18 +7,22 @@ import asyncpg
 class GuildConfig:
     guild_id: int
     locale: str | None = None
+    use_vanity_invite: bool = False
     custom_invite_code: str | None = None
     entry_log_channel_id: int | None = None
     verification_log_channel_id: int | None = None
+    setup_complete: bool = False
 
     @classmethod
     def from_record(cls, record: asyncpg.Record) -> "GuildConfig":
         return cls(
             guild_id=record["guild_id"],
             locale=record["locale"],
+            use_vanity_invite=record["use_vanity_invite"],
             custom_invite_code=record["custom_invite_code"],
             entry_log_channel_id=record["entry_log_channel_id"],
             verification_log_channel_id=record["verification_log_channel_id"],
+            setup_complete=record["setup_complete"],
         )
 
     @classmethod
@@ -50,18 +54,20 @@ class GuildConfig:
         """
 
         query = """
-            INSERT INTO guilds (guild_id, locale, custom_invite_code, entry_log_channel_id, verification_log_channel_id)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO guilds (guild_id, locale, use_vanity_invite, custom_invite_code, entry_log_channel_id, verification_log_channel_id, setup_complete)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             ON CONFLICT (guild_id) DO UPDATE
-            SET locale = $2, custom_invite_code = $3, entry_log_channel_id = $4, verification_log_channel_id = $5
+            SET locale = $2, use_vanity_invite = $3, custom_invite_code = $4, entry_log_channel_id = $5, verification_log_channel_id = $6, setup_complete = $7
         """
         await pool.execute(
             query,
             self.guild_id,
             self.locale,
+            self.use_vanity_invite,
             self.custom_invite_code,
             self.entry_log_channel_id,
             self.verification_log_channel_id,
+            self.setup_complete,
         )
 
 
