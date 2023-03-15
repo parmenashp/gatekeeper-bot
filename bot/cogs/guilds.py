@@ -26,6 +26,12 @@ REQUIRED_PERMISSIONS = [
 VIEWS_TIMEOUT = 600
 
 
+class BotCannotSeeChannel(Exception):
+    """Raised when the bot cannot see a channel."""
+
+    pass
+
+
 class SetupBaseView(discord.ui.View):
     """Base view for the setup process.
     Used to display the cancel button in all views.
@@ -69,41 +75,198 @@ class SetupBaseView(discord.ui.View):
                 item.disabled = True  # type: ignore
             await self.last_interaction.edit_original_response(view=self)
 
-    @discord.ui.button(label="setup_cancel_button", style=discord.ButtonStyle.red)
+    @discord.ui.button(label="setup_button.cancel", style=discord.ButtonStyle.red)
     async def cancel_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         bot = get_bot_from_interaction(interaction)
         _ = bot.l10n.get_localization(interaction.locale).format
-        await interaction.response.edit_message(content=_("setup_cancel_button.pressed"), embed=None, view=None)
+        self.disable_timeout()
+        await interaction.response.edit_message(content=_("setup_button.cancel_pressed"), embed=None, view=None)
 
 
-class SetupLogChannelView(SetupBaseView):
+class SetupConfirmationView(SetupBaseView):
+    def embed(
+        self,
+        l10n: Localization,
+        locale: discord.Locale,
+        invite_url: str,
+        log_channel: discord.app_commands.AppCommandChannel | discord.app_commands.AppCommandThread | None,
+    ):
+        """Create the embed for this view."""
+        _ = l10n.get_localization(locale).format
+        embed = discord.Embed(title=_("setup_confirmation_view.title"))
+        embed.description = _(
+            "setup_confirmation_view.description",
+            {
+                "log_channel": log_channel.mention if log_channel else "No channel set.",
+                "invite": invite_url,
+            },
+        )
+        embed.set_footer(text=_("setup_confirmation_view.footer"))
+        return embed
+
+    async def _update_guild_setup_status(self, guild_id: int):
+        bot = get_bot_from_interaction(self.last_interaction)  # type: ignore
+        """Update the guild setup status."""
+        guild = await models.GuildConfig.get(pool=bot.pool, guild_id=guild_id)
+        if guild is not None:
+            guild.setup_complete = True
+            await guild.save(pool=bot.pool)
+            return True
+        logger.warning(f"Guild {guild_id} not found in the database when updating setup status to True.")
+        return False
+
+    @discord.ui.button(label="setup_button.continue", style=discord.ButtonStyle.green)
+    async def confirm_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        bot = get_bot_from_interaction(interaction)
+        _ = bot.l10n.get_localization(interaction.locale).format
+        self.disable_timeout()
+        result = await self._update_guild_setup_status(interaction.guild.id)  # type: ignore
+        if result:
+            embed = discord.Embed(
+                title=_("setup_confirmation_view.confirmed_embed_title"),
+                description=_("setup_confirmation_view.confirmed_embed_description"),
+                color=discord.Color.green(),
+            )
+            await interaction.response.edit_message(embed=embed, view=None)
+        else:
+            await interaction.response.edit_message(
+                content=_("setup_confirmation_view.confirmed_error"), embed=None, view=None
+            )
+
+
+class SetupInviteView(SetupBaseView):
     def __init__(
         self,
         *,
-        is_missing_permissions: bool = False,
-        channel: app_commands.AppCommandChannel | app_commands.AppCommandThread | None = None,
         last_interaction: discord.Interaction | None = None,
+        channel_select: bool = False,
+        log_channel: discord.app_commands.AppCommandChannel | discord.app_commands.AppCommandThread | None,
     ):
         super().__init__(last_interaction=last_interaction)
-        self.is_missing_permissions = is_missing_permissions
-        self.channel = channel
+        self.log_channel = log_channel
 
-        if self.is_missing_permissions:
-            self.remove_item(self.log_channel_select)
+        self.vanity_url = last_interaction.guild.vanity_url  # type: ignore
+        if last_interaction.guild.vanity_url is None:  # type: ignore
+            self.remove_item(self.vanity_invite_button)
+
+        if channel_select:
+            self.remove_item(self.generate_invite_button)
         else:
-            self.remove_item(self.retry_button)
+            self.remove_item(self.invite_channel_select)
 
     def embed(self, l10n: Localization, locale: discord.Locale):
         """Create the embed for this view."""
         _ = l10n.get_localization(locale).format
-        if not self.is_missing_permissions:
-            embed = discord.Embed(title="setup_log_view.title", description="setup_log_view.description")
-            embed.set_footer(text="setup_log_view.footer")
+        embed = discord.Embed(title=_("setup_invite_view.title"))
+        embed.description = _(
+            "setup_invite_view.description",
+            {
+                "info": _("setup_invite_view.info_vanity_invite", {"invite_url": self.vanity_url})
+                if self.vanity_url
+                else _("setup_invite_view.info_normal_invite")
+            },
+        )
+        embed.set_footer(
+            text=_("setup_invite_view.footer_vanity_invite")
+            if self.vanity_url
+            else _("setup_invite_view.footer_normal_invite")
+        )
+        return embed
+
+    def _check_permissions(self, guild: discord.Guild, channel_id: int) -> bool:
+        """Check if the bot has the required permissions in the selected channel."""
+        resolved_channel = guild.get_channel_or_thread(channel_id)
+        if resolved_channel:
+            return resolved_channel.permissions_for(guild.me).create_instant_invite
         else:
-            embed = discord.Embed(
-                title="setup_log_view.title", description="setup_log_view.description_missing_permissions"
+            raise BotCannotSeeChannel("The bot can't see the channel.")
+
+    async def update_guild_config_invite(self, guild_id: int, invite_code: str | None = None, vanity: bool = False):
+        bot = get_bot_from_interaction(self.last_interaction)  # type: ignore
+        guild = await models.GuildConfig.get(pool=bot.pool, guild_id=guild_id)
+        if guild is not None:
+            if vanity:
+                guild.use_vanity_invite = True
+            elif invite_code is not None:
+                guild.custom_invite_code = invite_code
+            await guild.save(pool=bot.pool)
+            return True
+        logger.warning(
+            f"Guild {guild_id} not found in the database when trying to update the invite code during setup."
+        )
+        return False
+
+    @discord.ui.button(label="setup_invite_view.vanity_invite_button", style=discord.ButtonStyle.blurple)
+    async def vanity_invite_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Called when the user selects the vanity invite button."""
+        bot = get_bot_from_interaction(interaction)
+        _ = bot.l10n.get_localization(interaction.locale).format
+
+        view = SetupConfirmationView(last_interaction=interaction)
+        embed = view.embed(bot.l10n, interaction.locale, invite_url=self.vanity_url, log_channel=self.log_channel)  # type: ignore
+
+        self.disable_timeout()
+
+        await interaction.response.edit_message(embed=embed, view=view)
+
+    @discord.ui.button(label="setup_invite_view.generate_invite_button", style=discord.ButtonStyle.blurple)
+    async def generate_invite_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        bot = get_bot_from_interaction(interaction)
+        _ = bot.l10n.get_localization(interaction.locale).format
+
+        view = SetupInviteView(last_interaction=interaction, channel_select=True, log_channel=self.log_channel)
+        embed = view.embed(bot.l10n, interaction.locale)
+
+        self.disable_timeout()
+
+        await interaction.response.edit_message(embed=embed, view=view)
+
+    @discord.ui.select(cls=discord.ui.ChannelSelect, placeholder="setup_invite_view.select_placeholder", row=0)
+    async def invite_channel_select(self, interaction: discord.Interaction, select: discord.ui.ChannelSelect):
+        """Called when the user selects a channel."""
+        bot = get_bot_from_interaction(interaction)
+        _ = bot.l10n.get_localization(interaction.locale).format
+        channel = select.values[0]
+        if interaction.guild is None:
+            return
+        try:
+            has_permissions = self._check_permissions(interaction.guild, channel.id)
+        except BotCannotSeeChannel:
+            return await interaction.response.send_message(
+                content=_("setup_invite_view.error_cannot_see_channel"), ephemeral=True
             )
-            embed.set_footer(text="setup_log_view.footer_missing_permissions")
+
+        if has_permissions:
+            resolved_channel = bot.get_channel(channel.id)
+            if not resolved_channel:
+                return await interaction.response.send_message(
+                    content=_("setup_invite_view.error_get_channel"), ephemeral=True
+                )
+            if isinstance(resolved_channel, (discord.Thread, discord.abc.PrivateChannel)):
+                return await interaction.response.send_message(
+                    content=_("setup_invite_view.error_cannot_be_thread"), ephemeral=True
+                )
+
+            invite = await resolved_channel.create_invite(reason="Join Guard invite", unique=True)
+            await self.update_guild_config_invite(guild_id=interaction.guild.id, invite_code=invite.code)
+
+            view = SetupConfirmationView(last_interaction=interaction)
+            embed = view.embed(bot.l10n, interaction.locale, invite_url=invite.url, log_channel=self.log_channel)
+            self.disable_timeout()
+            return await interaction.response.edit_message(embed=embed, view=view)
+
+        else:
+            await interaction.response.send_message(
+                content=_("setup_invite_view.error_no_permissions", {"channel": channel.mention}), ephemeral=True
+            )
+
+
+class SetupLogChannelView(SetupBaseView):
+    def embed(self, l10n: Localization, locale: discord.Locale):
+        """Create the embed for this view."""
+        _ = l10n.get_localization(locale).format
+        embed = discord.Embed(title=_("setup_log_view.title"), description=_("setup_log_view.description"))
+        embed.set_footer(text=_("setup_log_view.footer"))
         return embed
 
     def _check_permissions(self, guild: discord.Guild, channel_id: int):
@@ -112,44 +275,58 @@ class SetupLogChannelView(SetupBaseView):
         if resolved_channel:
             return resolved_channel.permissions_for(guild.me).manage_webhooks
         else:
-            # TODO: Send some kind of error
-            return False
+            raise BotCannotSeeChannel("The bot can't see the channel.")
 
-    def update_guild_config(self, guild_id: int, channel_id: int):
-        pass
+    async def update_guild_config(self, guild_id: int, channel_id: int):
+        bot = get_bot_from_interaction(self.last_interaction)  # type: ignore
+
+        guild = await models.GuildConfig.get(pool=bot.pool, guild_id=guild_id)
+        if guild is not None:
+            guild.entry_log_channel_id = channel_id
+            await guild.save(pool=bot.pool)
+            return True
+
+        logger.warning(f"Guild {guild_id} not found in database when trying to update log channel during setup")
+        return False
 
     @discord.ui.select(cls=discord.ui.ChannelSelect, placeholder="setup_log_view.placeholder")
     async def log_channel_select(self, interaction: discord.Interaction, select: discord.ui.ChannelSelect):
         """Called when the user selects a channel."""
         bot = get_bot_from_interaction(interaction)
+        _ = bot.l10n.get_localization(interaction.locale).format
         self.channel = select.values[0]
 
-        if not self._check_permissions(interaction.guild, self.channel.id):  # type: ignore
-            view = SetupLogChannelView(is_missing_permissions=True, channel=self.channel, last_interaction=interaction)
+        try:
+            has_permissions = self._check_permissions(interaction.guild, self.channel.id)  # type: ignore
+        except BotCannotSeeChannel:
+            return await interaction.response.send_message(
+                content=_("setup_log_view.error_cannot_see_channel"), ephemeral=True
+            )
+
+        if has_permissions:
+            view = SetupInviteView(last_interaction=interaction, log_channel=self.channel)
             embed = view.embed(bot.l10n, interaction.locale)
 
-            await interaction.response.edit_message(
-                embed=embed,
-                view=view,
-            )
+            self.disable_timeout()
 
-        await interaction.response.edit_message(
-            content=f"Canal selecionado de primeira: {self.channel.mention}",  # type: ignore
-            embed=None,
-            view=None,
+            return await interaction.response.edit_message(embed=embed, view=view)
+
+        await interaction.response.send_message(
+            content=_("setup_log_view.error_no_permissions", {"channel": self.channel.mention}),
+            ephemeral=True,
         )
+        # TODO: Maybe delete the message after a channel is actually selected?
 
-    @discord.ui.button(label="setup_retry_button", style=discord.ButtonStyle.grey)
-    async def retry_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if self._check_permissions(self.channel.guild, self.channel.id):  # type: ignore
-            await interaction.response.edit_message(
-                content=f"Canal seleccionado: {self.channel.mention}",  # type: ignore
-                embed=None,
-                view=None,
-            )
-        else:
-            await interaction.response.defer()
-            # TODO: Maybe alert the user that is sill missing permissions
+    @discord.ui.button(label="setup_button.skip", style=discord.ButtonStyle.gray)
+    async def skip_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Called when the user selects the skip button."""
+        bot = get_bot_from_interaction(interaction)
+        view = SetupInviteView(last_interaction=interaction, log_channel=None)
+        embed = view.embed(bot.l10n, interaction.locale)
+
+        self.disable_timeout()
+
+        await interaction.response.edit_message(embed=embed, view=view)
 
 
 class SetupPermissionsView(SetupBaseView):
@@ -188,9 +365,9 @@ class SetupPermissionsView(SetupBaseView):
             localizated_permission = _(f"permissions.{permission}")
 
             if permission in missing_permissions:
-                list_to_join.append(f"{Emojis.small_x_mark()} {localizated_permission}")
+                list_to_join.append(f"{Emojis.small_x_mark} {localizated_permission}")
             else:
-                list_to_join.append(f"{Emojis.small_check_mark()} {localizated_permission}")
+                list_to_join.append(f"{Emojis.small_check_mark} {localizated_permission}")
 
         return "\n".join(list_to_join)
 
@@ -199,14 +376,17 @@ class SetupPermissionsView(SetupBaseView):
         guild_permissions = self.last_interaction.guild.me.guild_permissions  # type: ignore
         return [permission for permission in REQUIRED_PERMISSIONS if not getattr(guild_permissions, permission)]
 
-    @discord.ui.button(label="setup_continue_button", style=discord.ButtonStyle.green)
+    @discord.ui.button(label="setup_button.continue", style=discord.ButtonStyle.green)
     async def continue_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         bot = get_bot_from_interaction(interaction)
         view = SetupLogChannelView(last_interaction=interaction)
         embed = view.embed(bot.l10n, interaction.locale)
+
+        self.disable_timeout()
+
         await interaction.response.edit_message(embed=embed, view=view)
 
-    @discord.ui.button(label="setup_retry_button", style=discord.ButtonStyle.grey)
+    @discord.ui.button(label="setup_button.retry", style=discord.ButtonStyle.grey)
     async def retry_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         bot = get_bot_from_interaction(interaction)
         view = SetupPermissionsView(last_interaction=interaction)
@@ -247,13 +427,33 @@ class SetupIntroView(SetupBaseView):
             .set_footer(text=_("setup_intro_embed.footer"))
         )
 
-    @discord.ui.button(label="setup_continue_button", style=discord.ButtonStyle.green)
+    @discord.ui.button(label="setup_button.continue", style=discord.ButtonStyle.green)
     async def continue_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         bot = get_bot_from_interaction(interaction)
         view = SetupPermissionsView(last_interaction=interaction)
         embed = view.embed(bot.l10n, interaction.locale)
         # Disable the timeout because we don't want this view to expire anymore
         # We will handle the timeout only in the next view
+        self.disable_timeout()
+
+        await interaction.response.edit_message(embed=embed, view=view)
+
+
+class SetupAlreadyDone(SetupBaseView):
+    def embed(self, l10n: Localization, locale: discord.Locale):
+        _ = l10n.get_localization(locale).format
+        return discord.Embed(
+            title=_("setup_already_done.title"),
+            description=_("setup_already_done.description"),
+            color=discord.Color.yellow(),
+        ).set_footer(text=_("setup_already_done.footer"))
+
+    @discord.ui.button(label="setup_button.continue", style=discord.ButtonStyle.green)
+    async def continue_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        bot = get_bot_from_interaction(interaction)
+        view = SetupIntroView(last_interaction=interaction)
+        embed = view.embed(bot.l10n, interaction.locale)
+
         self.disable_timeout()
 
         await interaction.response.edit_message(embed=embed, view=view)
@@ -311,11 +511,19 @@ class Guilds(commands.Cog):
 
     @commands.Cog.listener()
     async def on_guild_remove(self, guild: discord.Guild):
-        logger.info(f"Left guild {guild.name} ({guild.id})")
+        logger.info(f"Bot left guild {guild.name} ({guild.id})")
 
     @app_commands.command(name="setup")
     @app_commands.guilds(296214474791190529)  # For testing purposes only
     async def setup_command(self, interaction: discord.Interaction) -> None:
+        bot = get_bot_from_interaction(interaction)
+        _ = bot.l10n.get_localization(interaction.locale).format
+        guild = await models.GuildConfig.get(bot.pool, interaction.guild_id)  # type: ignore
+        if guild and guild.setup_complete:
+            view = SetupAlreadyDone(last_interaction=interaction)
+            embed = view.embed(bot.l10n, interaction.locale)
+            return await interaction.response.send_message(embed=embed, view=view)
+
         view = SetupIntroView(last_interaction=interaction)
         embed = view.embed(self.bot.l10n, interaction.locale)
 
